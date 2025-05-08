@@ -1,0 +1,59 @@
+production:
+  primary:
+    adapter: postgresql
+    database: redmine
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    pool: 5
+  import_source:
+    adapter: postgresql
+    database: import_source
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    port: 5432
+    variables:
+      default_transaction_read_only: true
+
+development:
+  primary:
+    adapter: postgresql
+    database: redmine
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    pool: 5
+  import_source:    
+    adapter: postgresql
+    database: import_source
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    port: 5432
+    variables:
+      default_transaction_read_only: true
+
+test:
+  primary:
+    adapter: postgresql
+    database: redmine_test
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    pool: 5
+  import_source:
+    adapter: postgresql
+    database: import_source_test
+    host: localhost
+    username: redmine
+    password: passw0rd
+    encoding: utf8
+    port: 5432
+    variables:
+      default_transaction_read_only: false

@@ -1,0 +1,6 @@
+.Gemfile.lock
+.vscode/*
+.git/*
+vendor
+config/database.yml
+
