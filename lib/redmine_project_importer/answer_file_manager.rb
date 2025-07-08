@@ -180,8 +180,20 @@ module RedmineProjectImporter
       end
       mapping.map do |source, target|
         formatted_target = if target.is_a?(Hash)
-                             target.transform_keys(&:to_s).transform_values do |value|
-                               value.is_a?(Array) ? value.to_s : value
+                             # custom_fields_mappingの場合はis_for_allも出力
+                             if target.key?(:custom_field_name) && (target.key?(:trackers) || target.key?(:target_id))
+                               target_hash = target.transform_keys(&:to_s).transform_values do |value|
+                                 value.is_a?(Array) ? value.to_s : value
+                               end
+                               # is_for_all属性があれば出力
+                               if target.key?(:is_for_all)
+                                 target_hash['is_for_all'] = target[:is_for_all]
+                               end
+                               target_hash
+                             else
+                               target.transform_keys(&:to_s).transform_values do |value|
+                                 value.is_a?(Array) ? value.to_s : value
+                               end
                              end
                            else
                              target.to_s # target が文字列の場合はそのまま文字列化

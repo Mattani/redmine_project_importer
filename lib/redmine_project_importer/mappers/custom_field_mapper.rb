@@ -39,6 +39,9 @@ module RedmineProjectImporter
                     target_id: target_field.id,
                     is_for_all: is_for_all
                   }
+                  logger.debug "Added custom field mapping: " \
+                               "source_id=#{source_field.id}, name=#{source_field.name}, " \
+                               "trackers=#{trackers.join(', ')}, target_id=#{target_field.id}, is_for_all=#{is_for_all}"
                 end
               else
                 context_mgr.add_warning({
