@@ -78,9 +78,50 @@ cd /var/lib/redmine/plugins
 bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production
 ```
 
+（実行例）
 
+```text
+# bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production
+==================================================================
+Redmine Project Importer plugin/0.1.1 Copyright(C)2025 H.Matsutani
+        This software is released under the MIT License.
+==================================================================
+SOURCE_PROJECT_ID is not set. Please set it and try again.
+SOURCE_PROJECT_ID    : PROJECT_NAME
+---------------------:--------------------------
+SOURCE_PROJECT_ID=1  : 開発プロジェクト
+SOURCE_PROJECT_ID=2  : 新規事業立ち上げ
+SOURCE_PROJECT_ID=3  : 社内改善タスク
+```
 
-###
+### インポート準備(pre_importタスク)
+
+pre_importタスクを実行して、インポート元のDBの指定したプロジェクトの関連情報を収集し、YAMLファイルに出力します。@redmine_project_importer.answer.（プロジェクト識別子）.yml@というファイルが出力されます。
+
+```sh
+bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production SOURCE_PROJECT_ID=(プロジェクトID)
+```
+
+（実行例）
+
+```text
+# bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production SOURCE_PROJECT_ID=1
+==================================================================
+Redmine Project Importer plugin/0.1.1 Copyright(C)2025 H.Matsutani
+        This software is released under the MIT License.
+==================================================================
+Prepare importing project with ID: 1
+  Project Import Service started. Source Project ID: 1
+  Generating mappings for project ID: 1
+    Generating custom field mappings
+    Generating group mappings
+      Warning: No matching target group found (source_group_id: 5, group_name: 開発G)
+    Generating member mappings
+    Generating tracker mappings
+    Generating status mappings
+Answer file created: /var/lib/redmine/redmine_project_importer.answer.development_project.yml
+Pre-import process completed successfully.
+```
 
 ## 対応バージョン
 
