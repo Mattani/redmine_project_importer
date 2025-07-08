@@ -20,6 +20,7 @@ module RedmineProjectImporter
 
           source_custom_fields.each do |source_field|
             target_field = target_custom_fields.find { |tf| tf.name == source_field.name }
+            is_for_all = source_field.is_for_all
             if target_field
               if target_field.field_format == source_field.field_format
                 trackers = fetch_trackers_for_custom_field(source_field.id)
@@ -28,19 +29,22 @@ module RedmineProjectImporter
                   context_mgr.add_warning({
                     source_custom_field_id: source_field.id,
                     custom_field_name: source_field.name,
+                    is_for_all: is_for_all,
                     message: 'No trackers found for this custom field'
                   })
                 else
                   mappings[source_field.id] = {
                     custom_field_name: source_field.name,
                     trackers: trackers,
-                    target_id: target_field.id
+                    target_id: target_field.id,
+                    is_for_all: is_for_all
                   }
                 end
               else
                 context_mgr.add_warning({
                   source_custom_field_id: source_field.id,
                   custom_field_name: source_field.name,
+                  is_for_all: is_for_all,
                   message: 'Custom field format mismatch'
                 })
               end
@@ -48,6 +52,7 @@ module RedmineProjectImporter
               context_mgr.add_warning({
                 source_custom_field_id: source_field.id,
                 custom_field_name: source_field.name,
+                is_for_all: is_for_all,
                 message: 'No matching target custom field found'
               })
             end
@@ -65,10 +70,14 @@ module RedmineProjectImporter
             config_path: File.expand_path('../../../config/database.yml', __dir__),
             namespace: :import_source
           ) do
-            custom_fields = SourceCustomField.joins(:custom_fields_projects)
-                                             .where('custom_fields_projects.project_id = ?', project_id)
+            # プロジェクト専用＋全プロジェクト向け両方を取得し、重複を除外
+            project_fields = SourceCustomField.joins(:custom_fields_projects)
+                                              .where('custom_fields_projects.project_id = ?', project_id)
+            for_all_fields = SourceCustomField.where(is_for_all: true)
+            custom_fields = (project_fields + for_all_fields).uniq { |field| field.id }
+
             custom_fields.each do |field|
-              logger.debug "Fetched source custom field: #{field.name}" # カスタムフィールド名を出力
+              logger.debug "Fetched source custom field: #{field.name}"
             end
             custom_fields
           end

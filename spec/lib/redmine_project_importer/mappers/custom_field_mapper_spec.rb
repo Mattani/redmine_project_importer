@@ -12,7 +12,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
   let(:context_mgr) { RedmineProjectImporter::ContextManager.new(source_project) }
   let(:source_custom_fields) do
     [
-      double('SourceCustomField', id: 1, name: 'Custom Field 1', field_format: 'string')
+      double('SourceCustomField', id: 1, name: 'Custom Field 1', field_format: 'string', is_for_all: false)
     ]
   end
   let(:target_custom_fields) do
@@ -25,6 +25,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
     allow(RedmineProjectImporter::DatabaseConnector).to receive(:with_connection).and_yield
     allow(SourceCustomField).to receive(:joins).with(:custom_fields_projects).and_return(SourceCustomField)
     allow(SourceCustomField).to receive(:where).with('custom_fields_projects.project_id = ?', project_id).and_return(source_custom_fields)
+    allow(SourceCustomField).to receive(:where).with(is_for_all: true).and_return([])
     allow(CustomField).to receive(:all).and_return(target_custom_fields)
   end
 
@@ -40,7 +41,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
             result = described_class.generate(context_mgr)
 
             expect(result[:mappings]).to eq({
-              1 => { custom_field_name: 'Custom Field 1', trackers: ['Tracker A', 'Tracker B'], target_id: 101 }
+              1 => { custom_field_name: 'Custom Field 1', trackers: ['Tracker A', 'Tracker B'], target_id: 101, is_for_all: false }
             })
 
             expect(context_mgr.warnings).to eq([])
@@ -57,7 +58,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
 
             expect(result[:mappings]).to eq({})
             expect(context_mgr.warnings).to eq([
-              { source_custom_field_id: 1, custom_field_name: 'Custom Field 1', message: 'Custom field format mismatch' }
+              { source_custom_field_id: 1, custom_field_name: 'Custom Field 1', is_for_all: false, message: 'Custom field format mismatch' }
             ])
           end
         end
@@ -73,7 +74,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
 
           expect(result[:mappings]).to eq({})
           expect(context_mgr.warnings).to eq([
-            { source_custom_field_id: 1, custom_field_name: 'Custom Field 1', message: 'No trackers found for this custom field' }
+            { source_custom_field_id: 1, custom_field_name: 'Custom Field 1', is_for_all: false, message: 'No trackers found for this custom field' }
           ])
         end
       end
@@ -82,6 +83,7 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
     context 'when no source custom fields are found' do
       before do
         allow(SourceCustomField).to receive(:where).with('custom_fields_projects.project_id = ?', project_id).and_return([])
+        allow(SourceCustomField).to receive(:where).with(is_for_all: true).and_return([])
       end
 
       it 'returns no mappings and no warnings' do
