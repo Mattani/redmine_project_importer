@@ -34,7 +34,7 @@ module RedmineProjectImporter
             if target_status
               mappings[source_status.id] = { target_status_id: target_status.id, target_status_name: target_status.name }
             else
-              context_mgr.add_error("No matching target status found for source status: #{source_status.name} (ID: #{source_status.id})")
+              context_mgr.add_error({ message: "No matching target status found for source status: #{source_status.name} (ID: #{source_status.id})" })
             end
           end
 
