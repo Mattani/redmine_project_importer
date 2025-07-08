@@ -4,9 +4,10 @@ namespace :redmine_project_importer do
     require File.expand_path('../../lib/redmine_project_importer/project_import_service', __dir__)
     plugin = Redmine::Plugin.find(:redmine_project_importer)
     @logger = RedmineProjectImporter.logger
-    @logger.info "======================================================================================="
-    @logger.info "#{plugin.name}/#{plugin.version} Copyright(C)2025 H.Matsutani All rights reserved."
-    @logger.info "======================================================================================="
+    @logger.info "=================================================================="
+    @logger.info "#{plugin.name}/#{plugin.version} Copyright(C)2025 H.Matsutani "
+    @logger.info "        This software is released under the MIT License."
+    @logger.info "=================================================================="
     @logger.debug "Environment: #{ENV['RAILS_ENV']}"
 
     # コマンドラインで入力されたコマンドをログファイルに記録
