@@ -1,11 +1,8 @@
-# RAILS_ENVが設定されていない場合、デフォルトでproductionに設定
-ENV['RAILS_ENV'] ||= 'production'
-
 Redmine::Plugin.register :redmine_project_importer do
   name 'Redmine Project Importer plugin'
   author 'H.Matsutani'
   description 'This plugin enables redmine managers to import projects from other redmine instances.'
-  version '0.1.0'
+  version '0.1.1'
   url 'https://github.com/Mattani/redmine_project_importer.git'
   author_url 'https://x.com/mattani'
 end
@@ -16,7 +13,7 @@ module RedmineProjectImporter
   def self.logger
     @logger ||= begin
       # Rails.envが未設定の場合はENV['RAILS_ENV']を使用
-      environment = ENV['RAILS_ENV'] || 'development'
+      environment = ENV['RAILS_ENV']
       log_output = environment == 'production' ? File.join(Rails.root, 'log', 'redmine_project_importer.log') : STDERR
       logger = Logger.new(log_output)
       logger.level = Logger::DEBUG
