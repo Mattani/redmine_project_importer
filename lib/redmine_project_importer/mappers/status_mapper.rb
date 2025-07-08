@@ -23,9 +23,13 @@ module RedmineProjectImporter
           target_statuses = fetch_target_statuses
           logger.debug("Fetched target statuses: #{target_statuses}")
 
+          logger.debug("source_statuses class: #{source_statuses.class}, first: #{source_statuses.first.inspect}")
+          logger.debug("target_statuses class: #{target_statuses.class}, first: #{target_statuses.first.inspect}")
+
           # マッピング処理
           mappings = {}
           source_statuses.each do |source_status|
+            logger.debug("source_status: #{source_status.inspect}")
             target_status = target_statuses.find { |ts| ts.name == source_status.name }
             if target_status
               mappings[source_status.id] = { target_status_id: target_status.id, target_status_name: target_status.name }
