@@ -7,6 +7,7 @@ module RedmineProjectImporter
         end
 
         def generate(context_mgr)
+          logger.info("    Generating status mappings")
           logger.debug("RoleMapper::generate called for project_id: #{context_mgr.source_project.id}")
 
           # インポート元プロジェクトで使用しているロールのみ抽出（import_source DB）
