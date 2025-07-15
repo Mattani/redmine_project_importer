@@ -99,6 +99,9 @@ module RedmineProjectImporter
 
       statuses_result = Mappers::StatusMapper.generate(self)
       @mappings[:statuses_mapping] = statuses_result[:mappings]
+
+      roles_result = Mappers::RoleMapper.generate(self)
+      @mappings[:roles_mapping] = roles_result[:mappings]
     end
 
     # データをストアするメソッド

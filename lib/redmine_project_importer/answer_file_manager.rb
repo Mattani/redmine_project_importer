@@ -85,12 +85,20 @@ module RedmineProjectImporter
           #   target_status_name: 移行先のステータス名
         #{generate_comment_block(@data[:statuses_mapping])}
 
+          roles_mapping:
+          # ロールのマッピング
+          # source_role_id:
+          #   target_role_id: 移行先のロールID
+          #   target_role_name: 移行先のロール名
+        #{generate_comment_block(@data[:roles_mapping])}
+
           custom_fields_mapping:
           # カスタムフィールドのマッピング
           # source_custom_field_id:
           #   custom_field_name: カスタムフィールド名
           #   trackers: [トラッカー名の配列]
           #   target_id: 移行先のカスタムフィールドID
+          #   is_for_all: 全プロジェクト向けかどうか（true/false）
         #{generate_comment_block(@data[:custom_fields_mapping])}
       YAML
 
@@ -180,20 +188,8 @@ module RedmineProjectImporter
       end
       mapping.map do |source, target|
         formatted_target = if target.is_a?(Hash)
-                             # custom_fields_mappingの場合はis_for_allも出力
-                             if target.key?(:custom_field_name) && (target.key?(:trackers) || target.key?(:target_id))
-                               target_hash = target.transform_keys(&:to_s).transform_values do |value|
-                                 value.is_a?(Array) ? value.to_s : value
-                               end
-                               # is_for_all属性があれば出力
-                               if target.key?(:is_for_all)
-                                 target_hash['is_for_all'] = target[:is_for_all]
-                               end
-                               target_hash
-                             else
-                               target.transform_keys(&:to_s).transform_values do |value|
-                                 value.is_a?(Array) ? value.to_s : value
-                               end
+                             target.transform_keys(&:to_s).transform_values do |value|
+                               value.is_a?(Array) ? value.to_s : value
                              end
                            else
                              target.to_s # target が文字列の場合はそのまま文字列化
