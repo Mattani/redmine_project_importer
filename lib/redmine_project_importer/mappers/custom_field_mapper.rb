@@ -73,10 +73,17 @@ module RedmineProjectImporter
             config_path: File.expand_path('../../../config/database.yml', __dir__),
             namespace: :import_source
           ) do
-            # プロジェクト専用＋全プロジェクト向け両方を取得し、重複を除外
+            # プロジェクト専用カスタムフィールド
             project_fields = SourceCustomField.joins(:custom_fields_projects)
                                               .where('custom_fields_projects.project_id = ?', project_id)
+            
+            # 全プロジェクト向けカスタムフィールドのうち、そのプロジェクトで使用しているトラッカーに関連するもののみ
             for_all_fields = SourceCustomField.where(is_for_all: true)
+                                              .joins(:source_custom_fields_trackers)
+                                              .joins("JOIN projects_trackers ON custom_fields_trackers.tracker_id = projects_trackers.tracker_id")
+                                              .where("projects_trackers.project_id = ?", project_id)
+                                              .distinct
+            
             custom_fields = (project_fields + for_all_fields).uniq { |field| field.id }
 
             custom_fields.each do |field|
