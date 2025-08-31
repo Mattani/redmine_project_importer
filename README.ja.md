@@ -1,16 +1,16 @@
 # Redmine Project Importer
 
-Redmine Project Importerは、他のRedmineインスタンスからプロジェクトをインポートできるRedmineプラグインです。
+他のRedmineインスタンスからプロジェクトをインポートできるRedmineプラグインです。
 
 ## 特長
 
-- プロジェクト単位でチケットを別のRedmineにコピーできます
-- チケットおよびチケットの追記情報、カスタムフィールドも移行できます
-- 親子チケットのマッピング、バージョンの対応も崩れずに移行できます
+- プロジェクト単位で別のRedmineからチケットをインポート
+- チケットの追記情報、カスタムフィールドも移行
+- 親子チケットのマッピング、バージョンの対応も維持
 
-## インストール方法
+## インストール
 
-1. このリポジトリをインポート先のRedmineの`plugins`ディレクトリに配置します。（以下、`/var/lib/redmine`にRedmineがインストールされている前提）
+1. インポート先のRedmineの`plugins`ディレクトリにこのリポジトリをクローンします。
 
     ```sh
     cd /var/lib/redmine/plugins
@@ -26,35 +26,48 @@ Redmine Project Importerは、他のRedmineインスタンスからプロジェ�
 
 3. Redmineを再起動します。
 
-## 使い方
+## クイックスタート
 
 ### 前提条件
 
-本プラグインのrakeタスクを実行する前に、インポート先のRedmineサーバにインポート元のRedmineのDBをimport_source DB領域にロードしておきます。
-PostgreSQLのDB領域として、以下のようになっていることが前提です。
-（いずれもインポート先のRedmineサーバに設定します。インポート元のRedmineからはDBをExportしておくだけです。）
+インポート先のRedmineサーバにインポート元のRedmineのDBを`import_source`データベース領域にロードしておきます。
 
-| サーバ                   | 種別         | DB領域名      | 備考                                         |
-|--------------------------|--------------|--------------|----------------------------------------------|
-| インポート先Redmineサーバ | インポート先  | redmine      | 通常のRedmineのDB領域                        |
-|                          | インポート元  | import_source| 本プラグインが読み込み用に参照するDB領域      |
+| サーバ | 種別 | データベース | 説明 |
+|--------|------|--------------|------|
+| インポート先Redmineサーバ | ターゲット | redmine | 通常のRedmineのDB |
+|                          | ソース | import_source | 本プラグインが参照するDB領域 |
 
-### プラグインの設定
+### PostgreSQL設定
 
-`plugins/redmine_project_importer/config/database.yml`を環境にあわせて作成します。
-`plugins/redmine_project_importer/config/database_sample.yml`ファイルをコピーして編集するのがおすすめです。
-primaryセクションは、`/var/lib/redmine/config/database.yml`にあわせてください。
-import_sourceセクションは、DB名以外は同じにすると簡単です。
-プラグインを利用するだけであれば、productionセクションのみの設定で大丈夫です。
+RedmineでPostgreSQLが設定されている場合、`pg_hba.conf`には以下のようなエントリがあるはずです：
 
-```yml:plugins/redmine_project_importer/config/database.yml
+```pg_hba.conf
+host    redmine         redmine         127.0.0.1/32            md5
+host    redmine         redmine         ::1/128                 md5
+```
+
+redmineユーザーが`import_source`データベースにアクセスできるよう、以下の行を追加します：
+
+```pg_hba.conf
+host    redmine         redmine         127.0.0.1/32            md5
+host    redmine         redmine         ::1/128                 md5
+host    import_source   redmine         127.0.0.1/32            md5
+host    import_source   redmine         ::1/128                 md5
+```
+
+### プラグイン設定
+
+`plugins/redmine_project_importer/config/database.yml`を環境に合わせて作成します。
+`plugins/redmine_project_importer/config/database_sample.yml`をコピーして編集してください。
+
+```yml
 production:
   primary:
     adapter: postgresql
     database: redmine
     host: localhost
     username: redmine
-    password: 環境にあわせて設定してください
+    password: your_password
     encoding: utf8
     pool: 5
   import_source:
@@ -62,71 +75,46 @@ production:
     database: import_source
     host: localhost
     username: redmine
-    password: 環境にあわせて設定してください
+    password: your_password
     encoding: utf8
     port: 5432
-    variables:
-      default_transaction_read_only: true
 ```
 
-### インポート元のDBからプロジェクト一覧を表示
-
-（インポートしたいプロジェクトのIDがわかっている場合はスキップ可能）
+### プロジェクト一覧表示（任意）
 
 ```sh
-cd /var/lib/redmine/plugins
-bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production
+bundle exec rake redmine_project_importer:list_projects RAILS_ENV=production
 ```
 
-（実行例）
-
-```text
-# bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production
-==================================================================
-Redmine Project Importer plugin/0.1.1 Copyright(C)2025 H.Matsutani
-        This software is released under the MIT License.
-==================================================================
-SOURCE_PROJECT_ID is not set. Please set it and try again.
-SOURCE_PROJECT_ID    : PROJECT_NAME
----------------------:--------------------------
-SOURCE_PROJECT_ID=1  : 開発プロジェクト
-SOURCE_PROJECT_ID=2  : 新規事業立ち上げ
-SOURCE_PROJECT_ID=3  : 社内改善タスク
-```
-
-### インポート準備(pre_importタスク)
-
-pre_importタスクを実行して、インポート元のDBの指定したプロジェクトの関連情報を収集し、YAMLファイルに出力します。@redmine_project_importer.answer.（プロジェクト識別子）.yml@というファイルが出力されます。
+### インポート準備
 
 ```sh
-bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production SOURCE_PROJECT_ID=(プロジェクトID)
+bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production SOURCE_PROJECT_ID=1
 ```
 
-（実行例）
+YAMLファイルが作成されます：`redmine_project_importer.answer.(project_identifier).yml`
 
-```text
-# bundle exec rake redmine_project_importer:pre_import RAILS_ENV=production SOURCE_PROJECT_ID=1
-==================================================================
-Redmine Project Importer plugin/0.1.1 Copyright(C)2025 H.Matsutani
-        This software is released under the MIT License.
-==================================================================
-Prepare importing project with ID: 1
-  Project Import Service started. Source Project ID: 1
-  Generating mappings for project ID: 1
-    Generating custom field mappings
-    Generating group mappings
-      Warning: No matching target group found (source_group_id: 5, group_name: 開発G)
-    Generating member mappings
-    Generating tracker mappings
-    Generating status mappings
-Answer file created: /var/lib/redmine/redmine_project_importer.answer.development_project.yml
-Pre-import process completed successfully.
+### インポート実行
+
+```sh
+bundle exec rake redmine_project_importer:exec_import RAILS_ENV=production SOURCE_PROJECT_ID=1
 ```
 
-## 対応バージョン
+実行後、結果ファイルが作成されます：`redmine_project_importer.result.(project_identifier).yml`
 
-Redmine 5.0以上
-（RailsのマルチDB機能を使用するため、Rails6.1以降となるRedmine5.0以上が必須です）
+## ドキュメント
+
+- [English Documentation](README.md)
+- [詳細インストール手順](docs/installation.ja.md)
+- [設定方法](docs/configuration.ja.md)
+- [使い方](docs/usage.ja.md)
+- [トラブルシューティング](docs/troubleshooting.ja.md)
+
+## 動作環境
+
+- Redmine 5.0以上
+- Rails 6.1以上（Railsマルチデータベース機能が必要）
+- PostgreSQL
 
 ## ライセンス
 
@@ -134,6 +122,6 @@ MIT License
 
 ## 作者
 
-- H.Matsutani  
-- [GitHub](https://github.com/Mattani)  
-- [X (旧Twitter)](https://x.com/mattani)
+- H.Matsutani
+- [GitHub](https://github.com/Mattani)
+- [X (Twitter)](https://x.com/mattani)
