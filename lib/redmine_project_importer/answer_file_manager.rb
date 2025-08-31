@@ -55,6 +55,13 @@ module RedmineProjectImporter
 
         mappings:
         # マッピング情報
+          roles_mapping:
+          # ロールのマッピング
+          # source_role_id:
+          #   target_role_id: 移行先のロールID
+          #   target_role_name: 移行先のロール名
+        #{generate_comment_block(@data[:roles_mapping])}
+
           groups_mapping:
           # グループユーザーのマッピング
           # source_group_id:
@@ -91,6 +98,7 @@ module RedmineProjectImporter
           #   custom_field_name: カスタムフィールド名
           #   trackers: [トラッカー名の配列]
           #   target_id: 移行先のカスタムフィールドID
+          #   is_for_all: 全プロジェクト向けかどうか（true/false）
         #{generate_comment_block(@data[:custom_fields_mapping])}
       YAML
 

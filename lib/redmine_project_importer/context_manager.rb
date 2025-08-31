@@ -4,11 +4,12 @@ module RedmineProjectImporter
     attr_accessor :target_project, :mappings, :headers, :warnings, :errors, :options, :issue_id_map, :version_id_map, :summary
 
     DEFAULTS = {
-      groups_mapping: {},         # グループマッピング (例: { source_group_id: { target_group_id: 移行先ID, roles: [ロールID] } })
-      members_mapping: {},        # ユーザーマッピング (例: { source_user_id: { email_address: メールアドレス, target_user_id: 移行先ユーザID } })
-      trackers_mapping: {},       # トラッカーマッピング
-      statuses_mapping: {},       # チケットステータスマッピング
-      custom_fields_mapping: {}   # カスタムフィールドのマッピング
+      roles_mapping: {},           # ロールマッピング (例: { source_role_id: { target_role_id: 移行先ID } })
+      groups_mapping: {},          # グループマッピング (例: { source_group_id: { target_group_id: 移行先ID, roles: [ロールID] } })
+      members_mapping: {},         # ユーザーマッピング (例: { source_user_id: { email_address: メールアドレス, target_user_id: 移行先ユーザID } })
+      trackers_mapping: {},        # トラッカーマッピング
+      statuses_mapping: {},        # チケットステータスマッピング
+      custom_fields_mapping: {}    # カスタムフィールドのマッピング
     }.freeze
     
     def initialize(source_project)
@@ -85,8 +86,8 @@ module RedmineProjectImporter
 
     def generate_mappings
       logger.info("  Generating mappings for project ID: #{@source_project.id}")
-      custom_fields_result = Mappers::CustomFieldMapper.generate(self)
-      @mappings[:custom_fields_mapping] = custom_fields_result[:mappings]
+      roles_result = Mappers::RoleMapper.generate(self)
+      @mappings[:roles_mapping] = roles_result[:mappings]
 
       groups_result = Mappers::GroupMapper.generate(self)
       @mappings[:groups_mapping] = groups_result[:mappings]
@@ -99,6 +100,9 @@ module RedmineProjectImporter
 
       statuses_result = Mappers::StatusMapper.generate(self)
       @mappings[:statuses_mapping] = statuses_result[:mappings]
+
+      custom_fields_result = Mappers::CustomFieldMapper.generate(self)
+      @mappings[:custom_fields_mapping] = custom_fields_result[:mappings]
     end
 
     # データをストアするメソッド

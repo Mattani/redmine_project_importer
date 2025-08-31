@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+  ls -1 /var/lib/redmine/config/database.yml.*
+  echo "database.yml -> `readlink /var/lib/redmine/config/database.yml`"
+  exit 1
+fi
+
+CONFIG_PATH="/var/lib/redmine/config/database.yml.$1"
+
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "エラー: $CONFIG_PATH が存在しません"
+  exit 1
+fi
+
+# 元の database.yml を削除
+rm /var/lib/redmine/config/database.yml
+
+# シンボリックリンクを作成
+ln -s "$CONFIG_PATH" /var/lib/redmine/config/database.yml
+
+# Apache を再起動
+systemctl restart httpd
+
+echo "操作が完了しました: $1 のシンボリックリンクが設定されました"

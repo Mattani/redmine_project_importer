@@ -70,6 +70,9 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
     allow(context_mgr).to receive(:mappings).and_return(mappings)
     allow(context_mgr).to receive(:issue_id_map=)
     allow(context_mgr).to receive(:issue_id_map).and_return({})
+
+    allow(User).to receive(:anonymous).and_return(double(id: 4))
+    allow(User).to receive(:exists?).and_return(true) # 必要に応じて
   end
 
   it 'fetches source issues and copies them with mapped attributes' do
@@ -81,14 +84,27 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
     expect(described_class).to have_received(:fetch_source_issues).with(source_project.id)
 
     source_issues.each do |issue|
+      expected_author_id = if User.exists?(id: mappings[:members_mapping][issue.author_id][:target_user_id])
+                             mappings[:members_mapping][issue.author_id][:target_user_id]
+                           else
+                             User.anonymous.id
+                           end
+
+      expected_assigned_to_id = if mappings[:members_mapping][issue.assigned_to_id] &&
+                                   User.exists?(id: mappings[:members_mapping][issue.assigned_to_id][:target_user_id])
+                                  mappings[:members_mapping][issue.assigned_to_id][:target_user_id]
+                                else
+                                  nil
+                                end
+
       expect(Issue).to have_received(:new).with(
         a_hash_including(
-          subject: issue.subject, # subjectを検証
+          subject: issue.subject,
           description: issue.description,
           tracker_id: mappings[:trackers_mapping][issue.tracker_id][:target_tracker_id],
           status_id: mappings[:statuses_mapping][issue.status_id][:target_status_id],
-          author_id: mappings[:members_mapping][issue.author_id][:target_user_id],
-          assigned_to_id: mappings[:members_mapping][issue.assigned_to_id][:target_user_id],
+          author_id: expected_author_id,
+          assigned_to_id: expected_assigned_to_id,
           priority_id: issue.priority_id,
           project_id: target_project.id
         )

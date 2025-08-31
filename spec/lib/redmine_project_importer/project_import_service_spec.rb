@@ -86,10 +86,20 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
   describe '.list_projects' do
     before do
       allow(RedmineProjectImporter::DatabaseConnector).to receive(:with_connection).and_yield
-      allow(SourceProject).to receive(:all).and_return([source_project])
+      allow(SourceProject).to receive(:order).with(:id).and_return([])
     end
 
     context 'when there are projects in the source database' do
+      let(:source_projects) do
+        [
+          double('SourceProject', id: 1, name: 'Test Project')
+        ]
+      end
+
+      before do
+        allow(SourceProject).to receive(:order).with(:id).and_return(source_projects)
+      end
+
       it 'logs the list of projects using RedmineProjectImporter.logger' do
         expect(RedmineProjectImporter.logger).to receive(:info).with("SOURCE_PROJECT_ID    : PROJECT_NAME")
         expect(RedmineProjectImporter.logger).to receive(:info).with("---------------------:--------------------------")
@@ -101,7 +111,7 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
 
     context 'when there are no projects in the source database' do
       before do
-        allow(SourceProject).to receive(:all).and_return([])
+        allow(SourceProject).to receive(:order).with(:id).and_return([])
       end
 
       it 'logs that no projects were found using RedmineProjectImporter.logger' do
