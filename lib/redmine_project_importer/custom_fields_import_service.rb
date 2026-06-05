@@ -151,7 +151,7 @@ module RedmineProjectImporter
                     # マッピングされた値を設定
                     mapped_custom_field_values[target_custom_field_id] = value
                     logger.debug("Mapped custom field ID #{custom_field_id} to target ID #{target_custom_field_id} with value: #{value}")
-                    logger.info("      imported Custom field #{custom_field.name} with value: #{value}")
+                    logger.debug("      imported Custom field #{custom_field.name} with value: #{value}")
                   else
                     logger.warn("Custom field ID #{target_custom_field_id} not found. Skipping.")
                   end
