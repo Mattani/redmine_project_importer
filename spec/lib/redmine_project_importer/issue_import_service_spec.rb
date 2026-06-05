@@ -54,6 +54,19 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
       )
     ]
   end
+    let(:anonymous_issue) do
+      double('Issue', id: 12,
+        subject: 'Anonymous Author Issue',
+        description: 'Description 3',
+        tracker_id: 2,
+        status_id: 3,
+        author_id: 4,
+        assigned_to_id: 1,
+        priority_id: 7,
+        created_on: Time.now,
+        updated_on: Time.now
+      )
+    end
   let(:mock_issue) { double('Issue', id: 999, subject: 'New Issue title', save!: true) }
   let(:context_mgr) { double('ContextManager') }
 
@@ -112,3 +125,19 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
     end
   end
 end
+
+  it 'keeps anonymous source authors as anonymous without warnings' do
+    allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([anonymous_issue])
+
+    described_class.import_issues(context_mgr)
+
+    expect(Issue).to have_received(:new).with(
+      a_hash_including(
+        subject: anonymous_issue.subject,
+        author_id: User.anonymous.id,
+        assigned_to_id: mappings[:members_mapping][anonymous_issue.assigned_to_id][:target_user_id],
+        project_id: target_project.id
+      )
+    )
+    expect(context_mgr).not_to have_received(:add_warning).with(hash_including(message: /Author for issue ##{anonymous_issue.id}/))
+  end

@@ -79,19 +79,24 @@ module RedmineProjectImporter
             return nil
           end
 
-          # `author_id` がマッピングできない場合は `Anonymous` を設定
-          author_mapping = mappings[:members_mapping][source_issue.author_id]
-          author_id = if author_mapping
-                        target_author_id = author_mapping[:target_user_id]
-                        if User.exists?(id: target_author_id)
-                          target_author_id
+          # source 側の author が anonymous の場合は、そのまま anonymous として扱う
+          # それ以外の author はマッピングを確認し、解決できない場合のみ anonymous にする
+          author_id = if source_issue.author_id == User.anonymous.id
+                        User.anonymous.id
+                      else
+                        author_mapping = mappings[:members_mapping][source_issue.author_id]
+                        if author_mapping
+                          target_author_id = author_mapping[:target_user_id]
+                          if User.exists?(id: target_author_id)
+                            target_author_id
+                          else
+                            context_mgr.add_warning({ message: "Author for issue ##{source_issue.id} not found in target DB. Setting to Anonymous." })
+                            User.anonymous.id
+                          end
                         else
-                          context_mgr.add_warning({ message: "Author for issue ##{source_issue.id} not found in target DB. Setting to Anonymous." })
+                          context_mgr.add_warning({ message: "Author for issue ##{source_issue.id} is not mapped. Setting to Anonymous." })
                           User.anonymous.id
                         end
-                      else
-                        context_mgr.add_warning({ message: "Author for issue ##{source_issue.id} is not mapped. Setting to Anonymous." })
-                        User.anonymous.id
                       end
 
           # `source_issue.assigned_to_id` が未設定ならそのまま担当者なしにする
