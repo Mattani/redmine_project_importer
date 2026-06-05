@@ -94,19 +94,24 @@ module RedmineProjectImporter
                         User.anonymous.id
                       end
 
-          # `assigned_to_id` がマッピングできない場合は空白（担当者なし）に設定
-          assigned_to_mapping = mappings[:members_mapping][source_issue.assigned_to_id]
-          assigned_to_id = if assigned_to_mapping
-                             target_assigned_to_id = assigned_to_mapping[:target_user_id]
-                             if User.exists?(id: target_assigned_to_id)
-                               target_assigned_to_id
+          # `source_issue.assigned_to_id` が未設定ならそのまま担当者なしにする
+          # 値がある場合のみマッピングを確認し、解決できなければ担当者なしにする
+          assigned_to_id = if source_issue.assigned_to_id.nil?
+                             nil
+                           else
+                             assigned_to_mapping = mappings[:members_mapping][source_issue.assigned_to_id]
+                             if assigned_to_mapping
+                               target_assigned_to_id = assigned_to_mapping[:target_user_id]
+                               if User.exists?(id: target_assigned_to_id)
+                                 target_assigned_to_id
+                               else
+                                 context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} not found in target DB. Setting to Unassigned." })
+                                 nil
+                               end
                              else
-                               context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} not found in target DB. Setting to Unassigned." })
+                               context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} is not mapped. Setting to Unassigned." })
                                nil
                              end
-                           else
-                             context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} is not mapped. Setting to Unassigned." })
-                             nil
                            end
 
           # `priority_id` は仮で `source_issue.priority_id` を使用
