@@ -25,7 +25,11 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
     allow(RedmineProjectImporter::DatabaseConnector).to receive(:with_connection).and_yield
     allow(SourceCustomField).to receive(:joins).with(:custom_fields_projects).and_return(SourceCustomField)
     allow(SourceCustomField).to receive(:where).with('custom_fields_projects.project_id = ?', project_id).and_return(source_custom_fields)
-    allow(SourceCustomField).to receive(:where).with(is_for_all: true).and_return([])
+    allow(SourceCustomField).to receive(:where).with(is_for_all: true).and_return(SourceCustomField)
+    allow(SourceCustomField).to receive(:joins).with(:source_custom_fields_trackers).and_return(SourceCustomField)
+    allow(SourceCustomField).to receive(:joins).with('JOIN projects_trackers ON custom_fields_trackers.tracker_id = projects_trackers.tracker_id').and_return(SourceCustomField)
+    allow(SourceCustomField).to receive(:where).with('projects_trackers.project_id = ?', project_id).and_return(SourceCustomField)
+    allow(SourceCustomField).to receive(:distinct).and_return([])
     allow(CustomField).to receive(:all).and_return(target_custom_fields)
   end
 
@@ -83,7 +87,6 @@ RSpec.describe RedmineProjectImporter::Mappers::CustomFieldMapper do
     context 'when no source custom fields are found' do
       before do
         allow(SourceCustomField).to receive(:where).with('custom_fields_projects.project_id = ?', project_id).and_return([])
-        allow(SourceCustomField).to receive(:where).with(is_for_all: true).and_return([])
       end
 
       it 'returns no mappings and no warnings' do

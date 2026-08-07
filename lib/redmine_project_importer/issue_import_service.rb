@@ -20,7 +20,7 @@ module RedmineProjectImporter
           namespace: :primary
         ) do
           source_issues.each do |source_issue|
-            new_issue = copy_issue(source_issue, target_project.id, mappings, context_mgr) 
+            new_issue = copy_issue(source_issue, target_project, mappings, context_mgr)
             issue_id_map[source_issue.id] = new_issue.id if new_issue
             logger.info "    Copied source issue to new issue ( ##{source_issue.id}  => ##{new_issue.id} ) #{new_issue.subject} " if new_issue
           end
@@ -65,7 +65,7 @@ module RedmineProjectImporter
         end
       end
 
-      def copy_issue(source_issue, target_project_id, mappings, context_mgr)
+      def copy_issue(source_issue, target_project, mappings, context_mgr)
         begin
           logger.debug("Tracker ID: #{source_issue.tracker_id} => #{mappings[:trackers_mapping][source_issue.tracker_id]}")
           logger.debug("Status ID: #{source_issue.status_id} => #{mappings[:statuses_mapping][source_issue.status_id]}")
@@ -101,30 +101,52 @@ module RedmineProjectImporter
 
           # `source_issue.assigned_to_id` が未設定ならそのまま担当者なしにする
           # 値がある場合のみマッピングを確認し、解決できなければ担当者なしにする
-          assigned_to_id = if source_issue.assigned_to_id.nil?
-                             nil
-                           else
-                             assigned_to_mapping = mappings[:members_mapping][source_issue.assigned_to_id]
-                             if assigned_to_mapping
-                               target_assigned_to_id = assigned_to_mapping[:target_user_id]
-                               if User.exists?(id: target_assigned_to_id)
-                                 target_assigned_to_id
-                               else
-                                 context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} not found in target DB. Setting to Unassigned." })
-                                 nil
-                               end
-                             else
-                               context_mgr.add_warning({ message: "Assigned To for issue ##{source_issue.id} is not mapped. Setting to Unassigned." })
-                               nil
-                             end
-                           end
+          # target user が存在してもtarget projectでassignableでない場合は、
+          # 一旦担当者なしで作成し、作成後にSQLで復元する（`pending_assignee_restore_id`）
+          assigned_to_id = nil
+          pending_assignee_restore_id = nil
+
+          unless source_issue.assigned_to_id.nil?
+            assigned_to_mapping = mappings[:members_mapping][source_issue.assigned_to_id]
+            if assigned_to_mapping
+              target_assigned_to_id = assigned_to_mapping[:target_user_id]
+              if User.exists?(id: target_assigned_to_id)
+                target_tracker = Tracker.find(tracker_mapping[:target_tracker_id])
+                target_user = User.find(target_assigned_to_id)
+                if target_project.assignable_users(target_tracker).include?(target_user)
+                  assigned_to_id = target_assigned_to_id
+                else
+                  pending_assignee_restore_id = target_assigned_to_id
+                  context_mgr.add_warning({
+                    source_issue_id: source_issue.id,
+                    source_assigned_to_id: source_issue.assigned_to_id,
+                    target_user_id: target_assigned_to_id,
+                    message: "Assigned To for issue ##{source_issue.id} is not assignable in the target project. Creating unassigned and restoring assigned_to_id via SQL."
+                  })
+                end
+              else
+                context_mgr.add_warning({
+                  source_issue_id: source_issue.id,
+                  source_assigned_to_id: source_issue.assigned_to_id,
+                  target_user_id: target_assigned_to_id,
+                  message: "Assigned To for issue ##{source_issue.id} not found in target DB. Setting to Unassigned."
+                })
+              end
+            else
+              context_mgr.add_warning({
+                source_issue_id: source_issue.id,
+                source_assigned_to_id: source_issue.assigned_to_id,
+                message: "Assigned To for issue ##{source_issue.id} is not mapped. Setting to Unassigned."
+              })
+            end
+          end
 
           # `priority_id` は仮で `source_issue.priority_id` を使用
           target_priority_id = source_issue.priority_id
 
           # IssueをActiveRecordで作成
           new_issue = Issue.create!(
-            project_id: target_project_id,
+            project_id: target_project.id,
             subject: source_issue.subject,
             description: source_issue.description,
             tracker_id: tracker_mapping[:target_tracker_id],
@@ -142,6 +164,26 @@ module RedmineProjectImporter
             WHERE id = #{new_issue.id}
           SQL
           ActiveRecord::Base.connection.execute(sql)
+
+          # assignable でなかった担当者を、Issue作成成功後に専用のbegin/rescueで復元する。
+          # 復元SQLが失敗しても外側のrescueに伝播させず、Issue作成自体の成功は維持する。
+          if pending_assignee_restore_id
+            begin
+              restore_sql = <<-SQL
+                UPDATE issues
+                SET assigned_to_id = #{pending_assignee_restore_id.to_i}
+                WHERE id = #{new_issue.id.to_i}
+              SQL
+              ActiveRecord::Base.connection.execute(restore_sql)
+            rescue StandardError => e
+              context_mgr.add_error({
+                source_issue_id: source_issue.id,
+                target_issue_id: new_issue.id,
+                target_user_id: pending_assignee_restore_id,
+                message: "Failed to restore assigned_to_id for issue ##{new_issue.id} (source ##{source_issue.id}): #{e.message}"
+              })
+            end
+          end
 
           new_issue
         rescue ActiveRecord::RecordInvalid => e

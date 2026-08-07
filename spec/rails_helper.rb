@@ -3,8 +3,8 @@
 ENV['RAILS_ENV'] ||= 'development'
 
 require File.expand_path('../../../../config/environment', __FILE__)
-require_relative 'spec_helper'
 require 'factory_bot_rails'
+require_relative 'spec_helper'
 
 # RSpecの設定
 RSpec.configure do |config|

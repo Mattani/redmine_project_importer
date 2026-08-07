@@ -1,10 +1,13 @@
 require_relative '../../rails_helper'
 require_relative '../../../lib/redmine_project_importer/answer_file_manager'
 
+require 'tmpdir'
+
 RSpec.describe RedmineProjectImporter::AnswerFileManager do
   let(:project_id) { 1 }
   let(:project_identifier) { 'test_project' }
-  let(:file_path) { File.join(Dir.pwd, "redmine_project_importer.answer.#{project_identifier}.yml") }
+  let(:output_dir) { Dir.mktmpdir }
+  let(:file_path) { File.join(output_dir, "redmine_project_importer.answer.#{project_identifier}.yml") }
   let(:context_mgr) { instance_double(RedmineProjectImporter::ContextManager, source_project: source_project) }
   let(:source_project) do
     double(
@@ -21,6 +24,7 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
   let(:manager) { described_class.new(context_mgr) }
 
   before do
+    ENV['REDMINE_PROJECT_IMPORTER_USER_FILE_PATH'] = output_dir
     File.delete(manager.file_path) if File.exist?(manager.file_path)
     allow(context_mgr).to receive(:mappings).and_return(RedmineProjectImporter::ContextManager::DEFAULTS)
     allow(context_mgr).to receive(:headers).and_return({
@@ -37,9 +41,14 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
     })
   end
 
+  after do
+    ENV.delete('REDMINE_PROJECT_IMPORTER_USER_FILE_PATH')
+    FileUtils.remove_entry(output_dir) if Dir.exist?(output_dir)
+  end
+
   describe '#initialize' do
     it 'sets the correct file path based on the project identifier' do
-      expected_path = File.join(Dir.pwd, "redmine_project_importer.answer.test_project.yml")
+      expected_path = File.join(output_dir, "redmine_project_importer.answer.test_project.yml")
       expect(manager.file_path).to eq(expected_path)
     end
 
@@ -60,6 +69,7 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
 
       # mappings の中身を確認
       expect(data[:mappings]).to eq({
+        roles_mapping: {},
         groups_mapping: {},
         members_mapping: {},
         trackers_mapping: {},
@@ -75,6 +85,9 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
     it 'creates the answer file with generated mappings and headers' do
       # デフォルトではないデータをモック
       allow(context_mgr).to receive(:mappings).and_return({
+        roles_mapping: {
+          1 => { target_role_id: 501 }
+        },
         groups_mapping: {
           10 => { group_name: "group10", target_group_id: 200, roles: [3] },
           15 => { group_name: "group15", target_group_id: 201, roles: [2, 4] }
@@ -105,6 +118,9 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
       })
 
       expect(data[:mappings]).to eq({
+        roles_mapping: {
+          1 => { target_role_id: 501 }
+        },
         groups_mapping: {
           10 => { group_name: "group10", target_group_id: 200, roles: [3] },
           15 => { group_name: "group15", target_group_id: 201, roles: [2, 4] }

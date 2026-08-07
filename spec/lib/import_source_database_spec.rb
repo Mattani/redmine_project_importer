@@ -1,3 +1,5 @@
+require_relative '../rails_helper'
+
 RSpec.describe 'ImportSource Database', type: :model do
   before do
     # import_source のDBに接続
@@ -15,7 +17,7 @@ RSpec.describe 'ImportSource Database', type: :model do
   end
 
   it 'import_source の issues に特定のプロジェクトIDのデータがあることを確認する' do
-    project_id = 5  # 確認したいプロジェクトID
+    project_id = 1  # 確認したいプロジェクトID
     expect(@source_issues.where(project_id: project_id).count).to be > 0
   end
 end

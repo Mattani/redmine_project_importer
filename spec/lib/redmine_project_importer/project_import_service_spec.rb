@@ -1,4 +1,5 @@
 require_relative '../../rails_helper'
+require 'tmpdir'
 
 RSpec.describe RedmineProjectImporter::ProjectImportService do
   let(:project_id) { 1 }
@@ -160,7 +161,10 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
   end
 
   describe '.import_project' do
+    let(:output_dir) { Dir.mktmpdir }
+
     before do
+      ENV['REDMINE_PROJECT_IMPORTER_USER_FILE_PATH'] = output_dir
       allow(RedmineProjectImporter::DatabaseConnector).to receive(:with_connection).and_yield
       allow(SourceProject).to receive(:find_by).with(id: project_id).and_return(source_project)
       allow(RedmineProjectImporter::ContextManager).to receive(:new).with(source_project).and_return(context_mgr)
@@ -176,6 +180,7 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
       allow(RedmineProjectImporter::MemberImportService).to receive(:import_members).and_return(true)
       allow(RedmineProjectImporter::IssueImportService).to receive(:import_issues).and_return(true)
       allow(context_mgr).to receive(:issue_id_map).and_return({ 1 => 101, 2 => 102 })
+      allow(context_mgr).to receive(:version_id_map).and_return({})
       allow(context_mgr).to receive(:store_summary).and_return(true)
       allow(context_mgr).to receive(:add_warning).and_return(true)
       allow(context_mgr).to receive(:warnings).and_return([])
@@ -203,6 +208,11 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
       })
     end
 
+    after do
+      ENV.delete('REDMINE_PROJECT_IMPORTER_USER_FILE_PATH')
+      FileUtils.remove_entry(output_dir) if Dir.exist?(output_dir)
+    end
+
     context 'when there are no errors' do
       it 'logs the result file creation message' do
         allow(Project).to receive(:new).and_return(target_project)
@@ -216,7 +226,8 @@ RSpec.describe RedmineProjectImporter::ProjectImportService do
         described_class.import_project(project_id)
 
         # 最後のログメッセージを評価
-        expect(log_messages.last).to eq("Result file created: /var/lib/redmine/redmine_project_importer.result.test_project.yml")
+        expected_path = File.join(output_dir, "redmine_project_importer.result.test_project.yml")
+        expect(log_messages.last).to eq("Result file created: #{expected_path}")
       end
     end
   end

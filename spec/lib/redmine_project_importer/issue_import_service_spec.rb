@@ -69,6 +69,9 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
     end
   let(:mock_issue) { double('Issue', id: 999, subject: 'New Issue title', save!: true) }
   let(:context_mgr) { double('ContextManager') }
+  let(:target_tracker) { double('Tracker', id: 202) }
+  let(:assignable_user) { double('User', id: 101) }
+  let(:non_assignable_user) { double('User', id: 102) }
 
   before do
     allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return(source_issues)
@@ -86,6 +89,12 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
 
     allow(User).to receive(:anonymous).and_return(double(id: 4))
     allow(User).to receive(:exists?).and_return(true) # 必要に応じて
+
+    # assigned_to_id の assignable 判定用のモック
+    allow(Tracker).to receive(:find).and_return(target_tracker)
+    allow(target_project).to receive(:assignable_users).and_return([assignable_user])
+    allow(User).to receive(:find).with(101).and_return(assignable_user)
+    allow(User).to receive(:find).with(102).and_return(non_assignable_user)
   end
 
   it 'fetches source issues and copies them with mapped attributes' do
@@ -124,7 +133,6 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
       )
     end
   end
-end
 
   it 'keeps anonymous source authors as anonymous without warnings' do
     allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([anonymous_issue])
@@ -141,3 +149,85 @@ end
     )
     expect(context_mgr).not_to have_received(:add_warning).with(hash_including(message: /Author for issue ##{anonymous_issue.id}/))
   end
+
+  describe 'assigned_to_id preservation' do
+    let(:assignable_issue) do
+      double('Issue', id: 20, subject: 'Assignable Issue', description: 'desc',
+        tracker_id: 2, status_id: 3, author_id: 1, assigned_to_id: 1, priority_id: 5,
+        created_on: Time.now, updated_on: Time.now)
+    end
+    let(:non_assignable_issue) do
+      double('Issue', id: 21, subject: 'Non-assignable Issue', description: 'desc',
+        tracker_id: 2, status_id: 3, author_id: 1, assigned_to_id: 2, priority_id: 5,
+        created_on: Time.now, updated_on: Time.now)
+    end
+    let(:missing_target_user_issue) do
+      double('Issue', id: 22, subject: 'Missing Target User Issue', description: 'desc',
+        tracker_id: 2, status_id: 3, author_id: 1, assigned_to_id: 1, priority_id: 5,
+        created_on: Time.now, updated_on: Time.now)
+    end
+    let(:unmapped_assignee_issue) do
+      double('Issue', id: 23, subject: 'Unmapped Assignee Issue', description: 'desc',
+        tracker_id: 2, status_id: 3, author_id: 1, assigned_to_id: 999, priority_id: 5,
+        created_on: Time.now, updated_on: Time.now)
+    end
+
+    let(:executed_sqls) { [] }
+
+    before do
+      # `DatabaseConnector.with_connection` は呼び出しごとに `ActiveRecord::Base.establish_connection` を
+      # 実行し直すため、`ActiveRecord::Base.connection` が指すインスタンスは呼び出しごとに変わりうる。
+      # 個々のインスタンスをスタブしても実際のSQL実行を捕捉できないため、アダプタクラス全体を対象にする。
+      allow_any_instance_of(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter).to receive(:execute).and_wrap_original do |original, sql, *rest|
+        executed_sqls << sql
+        original.call(sql, *rest)
+      end
+    end
+
+    it 'assigns the target user directly when they are assignable in the target project' do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([assignable_issue])
+
+      described_class.import_issues(context_mgr)
+
+      expect(Issue).to have_received(:new).with(a_hash_including(assigned_to_id: 101))
+      expect(executed_sqls).not_to include(a_string_including('assigned_to_id ='))
+    end
+
+    it 'creates the issue unassigned and restores assigned_to_id via SQL when the target user is not assignable' do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([non_assignable_issue])
+
+      described_class.import_issues(context_mgr)
+
+      expect(Issue).to have_received(:new).with(a_hash_including(assigned_to_id: nil))
+      expect(executed_sqls).to include(a_string_including('assigned_to_id = 102'))
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(source_issue_id: non_assignable_issue.id, source_assigned_to_id: 2, target_user_id: 102)
+      )
+    end
+
+    it 'sets assigned_to_id to nil when the mapped target user does not exist in the target DB' do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([missing_target_user_issue])
+      allow(User).to receive(:exists?).with(id: 101).and_return(false)
+
+      described_class.import_issues(context_mgr)
+
+      expect(Issue).to have_received(:new).with(a_hash_including(assigned_to_id: nil))
+      expect(executed_sqls).not_to include(a_string_including('assigned_to_id ='))
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(source_issue_id: missing_target_user_issue.id, source_assigned_to_id: 1, target_user_id: 101)
+      )
+    end
+
+    it 'sets assigned_to_id to nil when there is no member mapping for the source assignee' do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([unmapped_assignee_issue])
+
+      described_class.import_issues(context_mgr)
+
+      expect(Issue).to have_received(:new).with(a_hash_including(assigned_to_id: nil))
+      expect(executed_sqls).not_to include(a_string_including('assigned_to_id ='))
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(source_issue_id: unmapped_assignee_issue.id, source_assigned_to_id: 999)
+      )
+    end
+  end
+end
