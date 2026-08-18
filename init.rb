@@ -16,7 +16,7 @@ module RedmineProjectImporter
       environment = ENV['RAILS_ENV']
       log_output = environment == 'production' ? File.join(Rails.root, 'log', 'redmine_project_importer.log') : STDERR
       logger = Logger.new(log_output)
-      logger.level = Logger::DEBUG
+      logger.level = ENV['REDMINE_PROJECT_IMPORTER_DEBUG'] ? Logger::DEBUG : Logger::INFO
       logger.formatter = proc do |severity, datetime, progname, msg|
         formatted_message = "[#{datetime}] #{severity}: #{msg}\n"
 

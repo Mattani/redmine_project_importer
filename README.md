@@ -103,6 +103,14 @@ bundle exec rake redmine_project_importer:exec_import RAILS_ENV=production SOURC
 
 After execution, a result file will be created: `redmine_project_importer.result.(project_identifier).yml`
 
+### Verbose Logging
+
+By default, only `INFO`-level logs (roughly one line per record) are printed. For detailed troubleshooting, set the `REDMINE_PROJECT_IMPORTER_DEBUG` environment variable to enable `DEBUG`-level logs.
+
+```sh
+REDMINE_PROJECT_IMPORTER_DEBUG=1 bundle exec rake redmine_project_importer:exec_import RAILS_ENV=production SOURCE_PROJECT_ID=1
+```
+
 ## Documentation
 
 - [日本語ドキュメント (Japanese Documentation)](README.ja.md)

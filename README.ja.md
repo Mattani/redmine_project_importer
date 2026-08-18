@@ -103,6 +103,14 @@ bundle exec rake redmine_project_importer:exec_import RAILS_ENV=production SOURC
 
 実行後、結果ファイルが作成されます：`redmine_project_importer.result.(project_identifier).yml`
 
+### 詳細ログの出力
+
+通常実行時は`INFO`レベル（1レコード1行程度の要約）のログのみが出力されます。詳細な調査が必要な場合は、環境変数`REDMINE_PROJECT_IMPORTER_DEBUG`を設定すると`DEBUG`レベルの詳細ログが出力されます。
+
+```sh
+REDMINE_PROJECT_IMPORTER_DEBUG=1 bundle exec rake redmine_project_importer:exec_import RAILS_ENV=production SOURCE_PROJECT_ID=1
+```
+
 ## ドキュメント
 
 - [English Documentation](README.md)
