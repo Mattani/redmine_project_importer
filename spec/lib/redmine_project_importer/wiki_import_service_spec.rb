@@ -57,6 +57,7 @@ RSpec.describe RedmineProjectImporter::WikiImportService, type: :service do
 
       before do
         allow(described_class).to receive(:fetch_source_wiki).with(source_project.id).and_return(source_wiki)
+        allow(Wiki).to receive(:find_by).and_return(nil)
         allow(Wiki).to receive(:new).and_return(mock_wiki)
         allow(described_class).to receive(:fetch_source_wiki_pages).with(source_wiki.id)
           .and_return([source_page_parent, source_page_child])
@@ -72,6 +73,32 @@ RSpec.describe RedmineProjectImporter::WikiImportService, type: :service do
         expect(Wiki).to have_received(:new).with(
           hash_including(project_id: target_project.id, start_page: 'Wiki', status: 1)
         )
+      end
+
+      context 'when the target project already has a wiki (e.g. auto-created by Redmine when the wiki module is enabled)' do
+        let(:existing_wiki) { double('Wiki', id: 999, start_page: 'Old', status: 1, update!: true) }
+
+        before do
+          allow(Wiki).to receive(:find_by).with(project_id: target_project.id).and_return(existing_wiki)
+        end
+
+        it 'reuses the existing wiki instead of creating a new one' do
+          described_class.import_wiki(context_mgr)
+
+          expect(Wiki).not_to have_received(:new)
+          expect(existing_wiki).to have_received(:update!).with(start_page: 'Wiki', status: 1)
+        end
+
+        it 'creates wiki pages under the reused wiki' do
+          described_class.import_wiki(context_mgr)
+
+          expect(WikiPage).to have_received(:new).with(
+            hash_including(wiki_id: existing_wiki.id, title: 'Parent')
+          )
+          expect(WikiPage).to have_received(:new).with(
+            hash_including(wiki_id: existing_wiki.id, title: 'Child')
+          )
+        end
       end
 
       it 'creates WikiPages for every source page' do
@@ -130,6 +157,7 @@ RSpec.describe RedmineProjectImporter::WikiImportService, type: :service do
 
     before do
       allow(described_class).to receive(:fetch_source_wiki).with(source_project.id).and_return(source_wiki)
+      allow(Wiki).to receive(:find_by).and_return(nil)
       allow(Wiki).to receive(:new).and_return(mock_wiki)
       allow(described_class).to receive(:fetch_source_wiki_pages).with(source_wiki.id).and_return([source_page])
       allow(WikiPage).to receive(:new).and_return(mock_page)
@@ -192,6 +220,7 @@ RSpec.describe RedmineProjectImporter::WikiImportService, type: :service do
 
     before do
       allow(described_class).to receive(:fetch_source_wiki).with(source_project.id).and_return(source_wiki)
+      allow(Wiki).to receive(:find_by).and_return(nil)
       allow(Wiki).to receive(:new).and_return(mock_wiki)
       allow(described_class).to receive(:fetch_source_wiki_pages).with(source_wiki.id).and_return([])
       allow(described_class).to receive(:fetch_wiki_contents_by_page).and_return({})

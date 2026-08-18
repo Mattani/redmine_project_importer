@@ -52,15 +52,28 @@ module RedmineProjectImporter
         end
       end
 
+      # Redmineは、対象プロジェクトで`wiki`モジュールが有効な場合、プロジェクト作成時に
+      # 自動で空のデフォルトWikiを作成する（`EnabledModule#module_enabled`）。
+      # `wikis.project_id`にはDBレベルのユニーク制約が無いため、これを考慮せず`Wiki.create!`する
+      # と同一プロジェクトに2件のWikiができてしまう。既存Wikiがあれば再利用する
+      # （Redmine自身の`Project#copy_wiki`と同じ`wiki = self.wiki || Wiki.new`の考え方）。
       def create_target_wiki(source_wiki, target_project)
         RedmineProjectImporter::DatabaseConnector.with_connection(
           env: Rails.env, config_path: config_path, namespace: :primary
         ) do
-          Wiki.create!(
-            project_id: target_project.id,
-            start_page: source_wiki.start_page,
-            status: source_wiki.status
-          )
+          existing_wiki = Wiki.find_by(project_id: target_project.id)
+          if existing_wiki
+            logger.info "  Reusing existing wiki for project: #{target_project.name} " \
+                        "(likely auto-created when the wiki module was enabled)"
+            existing_wiki.update!(start_page: source_wiki.start_page, status: source_wiki.status)
+            existing_wiki
+          else
+            Wiki.create!(
+              project_id: target_project.id,
+              start_page: source_wiki.start_page,
+              status: source_wiki.status
+            )
+          end
         end
       end
 
