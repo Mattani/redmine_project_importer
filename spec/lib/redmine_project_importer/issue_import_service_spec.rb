@@ -254,6 +254,7 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
 
     it 'maps fixed_version_id to the target version id when a mapping exists' do
       allow(context_mgr).to receive(:version_id_map).and_return({ 40 => 340 })
+      allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'open'))
       allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([versioned_issue])
 
       described_class.import_issues(context_mgr)
@@ -279,6 +280,44 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
       expect(context_mgr).to have_received(:add_warning).with(
         hash_including(source_issue_id: unmapped_version_issue.id, source_fixed_version_id: 999)
       )
+    end
+
+    context 'when the target version is locked or closed' do
+      let(:executed_sqls) { [] }
+
+      before do
+        allow(context_mgr).to receive(:version_id_map).and_return({ 40 => 340 })
+        allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([versioned_issue])
+
+        allow_any_instance_of(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter).to receive(:execute).and_wrap_original do |original, sql, *rest|
+          executed_sqls << sql
+          original.call(sql, *rest)
+        end
+      end
+
+      it 'creates the issue without a version and restores fixed_version_id via SQL when locked' do
+        allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'locked'))
+
+        described_class.import_issues(context_mgr)
+
+        expect(Issue).to have_received(:new).with(a_hash_including(fixed_version_id: nil))
+        expect(executed_sqls).to include(a_string_including('fixed_version_id = 340'))
+        expect(context_mgr).to have_received(:add_warning).with(
+          hash_including(source_issue_id: versioned_issue.id, source_fixed_version_id: 40, target_version_id: 340)
+        )
+      end
+
+      it 'creates the issue without a version and restores fixed_version_id via SQL when closed' do
+        allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'closed'))
+
+        described_class.import_issues(context_mgr)
+
+        expect(Issue).to have_received(:new).with(a_hash_including(fixed_version_id: nil))
+        expect(executed_sqls).to include(a_string_including('fixed_version_id = 340'))
+        expect(context_mgr).to have_received(:add_warning).with(
+          hash_including(source_issue_id: versioned_issue.id, source_fixed_version_id: 40, target_version_id: 340)
+        )
+      end
     end
   end
 end

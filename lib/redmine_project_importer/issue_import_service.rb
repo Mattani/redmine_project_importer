@@ -148,11 +148,26 @@ module RedmineProjectImporter
           # 値が無い場合はそのまま無指定。マッピングが見つからない場合
           # （共有バージョン等、ソースプロジェクト外が所有するバージョンを参照している場合を含む）は
           # 警告を記録した上で無指定にする。
+          # target version がロック済み/クローズ済み（status != 'open'）の場合、Redmineの
+          # assignable_versions は新規Issue作成時にそれを許容しないためバリデーションエラーになる。
+          # 一旦無指定で作成し、作成後にSQLで復元する（`pending_fixed_version_restore_id`）。
           target_fixed_version_id = nil
+          pending_fixed_version_restore_id = nil
           unless source_issue.fixed_version_id.nil?
             mapped_version_id = context_mgr.version_id_map[source_issue.fixed_version_id]
             if mapped_version_id
-              target_fixed_version_id = mapped_version_id
+              target_version = Version.find_by(id: mapped_version_id)
+              if target_version && target_version.status == 'open'
+                target_fixed_version_id = mapped_version_id
+              else
+                pending_fixed_version_restore_id = mapped_version_id
+                context_mgr.add_warning({
+                  source_issue_id: source_issue.id,
+                  source_fixed_version_id: source_issue.fixed_version_id,
+                  target_version_id: mapped_version_id,
+                  message: "Fixed version for issue ##{source_issue.id} is locked or closed in the target project. Creating without a version and restoring fixed_version_id via SQL."
+                })
+              end
             else
               context_mgr.add_warning({
                 source_issue_id: source_issue.id,
@@ -200,6 +215,26 @@ module RedmineProjectImporter
                 target_issue_id: new_issue.id,
                 target_user_id: pending_assignee_restore_id,
                 message: "Failed to restore assigned_to_id for issue ##{new_issue.id} (source ##{source_issue.id}): #{e.message}"
+              })
+            end
+          end
+
+          # ロック済み/クローズ済みだった対象バージョンを、Issue作成成功後に専用のbegin/rescueで復元する。
+          # 復元SQLが失敗しても外側のrescueに伝播させず、Issue作成自体の成功は維持する。
+          if pending_fixed_version_restore_id
+            begin
+              restore_version_sql = <<-SQL
+                UPDATE issues
+                SET fixed_version_id = #{pending_fixed_version_restore_id.to_i}
+                WHERE id = #{new_issue.id.to_i}
+              SQL
+              ActiveRecord::Base.connection.execute(restore_version_sql)
+            rescue StandardError => e
+              context_mgr.add_error({
+                source_issue_id: source_issue.id,
+                target_issue_id: new_issue.id,
+                target_version_id: pending_fixed_version_restore_id,
+                message: "Failed to restore fixed_version_id for issue ##{new_issue.id} (source ##{source_issue.id}): #{e.message}"
               })
             end
           end
