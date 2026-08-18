@@ -60,5 +60,29 @@ RSpec.describe RedmineProjectImporter::JournalImportService do
 
       RedmineProjectImporter::JournalImportService.import_journals(context_mgr)
     end
+
+    it 'adds a warning (not an error) when Journal.create! raises a validation error' do
+      invalid_journal = Journal.new
+      invalid_journal.valid?
+      allow(Journal).to receive(:create!).and_raise(ActiveRecord::RecordInvalid.new(invalid_journal))
+
+      RedmineProjectImporter::JournalImportService.import_journals(context_mgr)
+
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(message: a_string_including('Failed to copy journal #1: Validation error'))
+      ).at_least(:once)
+      expect(context_mgr).not_to have_received(:add_error)
+    end
+
+    it 'adds a warning (not an error) when Journal.create! raises an unexpected error' do
+      allow(Journal).to receive(:create!).and_raise(StandardError, 'boom')
+
+      RedmineProjectImporter::JournalImportService.import_journals(context_mgr)
+
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(message: a_string_including('Failed to copy journal #1: Unexpected error'))
+      ).at_least(:once)
+      expect(context_mgr).not_to have_received(:add_error)
+    end
   end
 end

@@ -117,12 +117,6 @@ module RedmineProjectImporter
                   assigned_to_id = target_assigned_to_id
                 else
                   pending_assignee_restore_id = target_assigned_to_id
-                  context_mgr.add_warning({
-                    source_issue_id: source_issue.id,
-                    source_assigned_to_id: source_issue.assigned_to_id,
-                    target_user_id: target_assigned_to_id,
-                    message: "Assigned To for issue ##{source_issue.id} is not assignable in the target project. Creating unassigned and restoring assigned_to_id via SQL."
-                  })
                 end
               else
                 context_mgr.add_warning({
@@ -161,12 +155,6 @@ module RedmineProjectImporter
                 target_fixed_version_id = mapped_version_id
               else
                 pending_fixed_version_restore_id = mapped_version_id
-                context_mgr.add_warning({
-                  source_issue_id: source_issue.id,
-                  source_fixed_version_id: source_issue.fixed_version_id,
-                  target_version_id: mapped_version_id,
-                  message: "Fixed version for issue ##{source_issue.id} is locked or closed in the target project. Creating without a version and restoring fixed_version_id via SQL."
-                })
               end
             else
               context_mgr.add_warning({
@@ -210,7 +198,7 @@ module RedmineProjectImporter
               SQL
               ActiveRecord::Base.connection.execute(restore_sql)
             rescue StandardError => e
-              context_mgr.add_error({
+              context_mgr.add_warning({
                 source_issue_id: source_issue.id,
                 target_issue_id: new_issue.id,
                 target_user_id: pending_assignee_restore_id,
@@ -230,7 +218,7 @@ module RedmineProjectImporter
               SQL
               ActiveRecord::Base.connection.execute(restore_version_sql)
             rescue StandardError => e
-              context_mgr.add_error({
+              context_mgr.add_warning({
                 source_issue_id: source_issue.id,
                 target_issue_id: new_issue.id,
                 target_version_id: pending_fixed_version_restore_id,
@@ -241,10 +229,10 @@ module RedmineProjectImporter
 
           new_issue
         rescue ActiveRecord::RecordInvalid => e
-          context_mgr.add_error({ message: "Failed to copy issue ##{source_issue.id}: Validation error - #{e.message}" })
+          context_mgr.add_warning({ message: "Failed to copy issue ##{source_issue.id}: Validation error - #{e.message}" })
           nil
         rescue StandardError => e
-          context_mgr.add_error({ message: "Failed to copy issue ##{source_issue.id}: Unexpected error - #{e.message}" })
+          context_mgr.add_warning({ message: "Failed to copy issue ##{source_issue.id}: Unexpected error - #{e.message}" })
           nil
         end
       end

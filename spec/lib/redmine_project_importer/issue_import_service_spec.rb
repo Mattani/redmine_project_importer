@@ -197,16 +197,30 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
       expect(executed_sqls).not_to include(a_string_including('assigned_to_id ='))
     end
 
-    it 'creates the issue unassigned and restores assigned_to_id via SQL when the target user is not assignable' do
+    it 'creates the issue unassigned and restores assigned_to_id via SQL when the target user is not assignable, without warning on success' do
       allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([non_assignable_issue])
 
       described_class.import_issues(context_mgr)
 
       expect(Issue).to have_received(:new).with(a_hash_including(assigned_to_id: nil))
       expect(executed_sqls).to include(a_string_including('assigned_to_id = 102'))
+      expect(context_mgr).not_to have_received(:add_warning)
+      expect(context_mgr).not_to have_received(:add_error)
+    end
+
+    it 'adds a warning (not an error) when restoring assigned_to_id via SQL fails' do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([non_assignable_issue])
+      allow_any_instance_of(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter).to receive(:execute).and_wrap_original do |original, sql, *rest|
+        raise ActiveRecord::StatementInvalid, 'boom' if sql.include?('assigned_to_id =')
+        original.call(sql, *rest)
+      end
+
+      described_class.import_issues(context_mgr)
+
       expect(context_mgr).to have_received(:add_warning).with(
-        hash_including(source_issue_id: non_assignable_issue.id, source_assigned_to_id: 2, target_user_id: 102)
+        hash_including(source_issue_id: non_assignable_issue.id, target_user_id: 102, message: a_string_including('Failed to restore assigned_to_id'))
       )
+      expect(context_mgr).not_to have_received(:add_error)
     end
 
     it 'sets assigned_to_id to nil when the mapped target user does not exist in the target DB' do
@@ -295,29 +309,77 @@ RSpec.describe RedmineProjectImporter::IssueImportService, type: :service do
         end
       end
 
-      it 'creates the issue without a version and restores fixed_version_id via SQL when locked' do
+      it 'creates the issue without a version and restores fixed_version_id via SQL when locked, without warning on success' do
         allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'locked'))
 
         described_class.import_issues(context_mgr)
 
         expect(Issue).to have_received(:new).with(a_hash_including(fixed_version_id: nil))
         expect(executed_sqls).to include(a_string_including('fixed_version_id = 340'))
-        expect(context_mgr).to have_received(:add_warning).with(
-          hash_including(source_issue_id: versioned_issue.id, source_fixed_version_id: 40, target_version_id: 340)
-        )
+        expect(context_mgr).not_to have_received(:add_warning)
+        expect(context_mgr).not_to have_received(:add_error)
       end
 
-      it 'creates the issue without a version and restores fixed_version_id via SQL when closed' do
+      it 'creates the issue without a version and restores fixed_version_id via SQL when closed, without warning on success' do
         allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'closed'))
 
         described_class.import_issues(context_mgr)
 
         expect(Issue).to have_received(:new).with(a_hash_including(fixed_version_id: nil))
         expect(executed_sqls).to include(a_string_including('fixed_version_id = 340'))
-        expect(context_mgr).to have_received(:add_warning).with(
-          hash_including(source_issue_id: versioned_issue.id, source_fixed_version_id: 40, target_version_id: 340)
-        )
+        expect(context_mgr).not_to have_received(:add_warning)
+        expect(context_mgr).not_to have_received(:add_error)
       end
+
+      it 'adds a warning (not an error) when restoring fixed_version_id via SQL fails' do
+        allow(Version).to receive(:find_by).with(id: 340).and_return(double('Version', status: 'locked'))
+        allow_any_instance_of(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter).to receive(:execute).and_wrap_original do |original, sql, *rest|
+          raise ActiveRecord::StatementInvalid, 'boom' if sql.include?('fixed_version_id =')
+          original.call(sql, *rest)
+        end
+
+        described_class.import_issues(context_mgr)
+
+        expect(context_mgr).to have_received(:add_warning).with(
+          hash_including(source_issue_id: versioned_issue.id, target_version_id: 340, message: a_string_including('Failed to restore fixed_version_id'))
+        )
+        expect(context_mgr).not_to have_received(:add_error)
+      end
+    end
+  end
+
+  describe 'issue creation failure handling' do
+    let(:failing_issue) do
+      double('Issue', id: 90, subject: 'Failing Issue', description: 'desc',
+        tracker_id: 2, status_id: 3, author_id: 1, assigned_to_id: nil, priority_id: 5,
+        fixed_version_id: nil, created_on: Time.now, updated_on: Time.now)
+    end
+
+    before do
+      allow(described_class).to receive(:fetch_source_issues).with(source_project.id).and_return([failing_issue])
+    end
+
+    it 'adds a warning (not an error) when Issue.create! raises a validation error' do
+      invalid_issue = double('Issue', class: Issue, errors: double('Errors', full_messages: ['Author cannot be blank']))
+      allow(mock_issue).to receive(:save!).and_raise(ActiveRecord::RecordInvalid.new(invalid_issue))
+
+      described_class.import_issues(context_mgr)
+
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(message: a_string_including("Failed to copy issue ##{failing_issue.id}: Validation error"))
+      )
+      expect(context_mgr).not_to have_received(:add_error)
+    end
+
+    it 'adds a warning (not an error) when Issue.create! raises an unexpected error' do
+      allow(mock_issue).to receive(:save!).and_raise(StandardError, 'boom')
+
+      described_class.import_issues(context_mgr)
+
+      expect(context_mgr).to have_received(:add_warning).with(
+        hash_including(message: a_string_including("Failed to copy issue ##{failing_issue.id}: Unexpected error"))
+      )
+      expect(context_mgr).not_to have_received(:add_error)
     end
   end
 end

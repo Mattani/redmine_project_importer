@@ -26,18 +26,18 @@ module RedmineProjectImporter
             roles = mapping_info[:roles]
 
             unless target_group_id
-              context_mgr.add_error( {:message=>"No target group ID found. Skipping group import.", :source_group_id => source_group_id})
+              context_mgr.add_warning( {:message=>"No target group ID found. Skipping group import.", :source_group_id => source_group_id})
               next
             end
 
             unless roles && !roles.empty?
-              context_mgr.add_error( {:message=>"No roles found for source group ID. Skipping group import.", :source_group_id => source_group_id})
+              context_mgr.add_warning( {:message=>"No roles found for source group ID. Skipping group import.", :source_group_id => source_group_id})
               next
             end
 
             target_group = Group.find_by(id: target_group_id)
             unless target_group
-              context_mgr.add_error( {:message=>"Target group not found for target group ID. Skipping group import.", :source_group_id => source_group_id})
+              context_mgr.add_warning( {:message=>"Target group not found for target group ID. Skipping group import.", :source_group_id => source_group_id})
               next
             end
 
@@ -59,21 +59,18 @@ module RedmineProjectImporter
             roles = mapping_info[:roles]
 
             unless target_user_id
-              message = "No target user ID found for source user ID #{source_user_id}. Skipping user import."
-              logger.info(message)
+              context_mgr.add_warning( {:message=>"No target user ID found. Skipping user import.", :source_user_id => source_user_id})
               next
             end
 
             unless roles && !roles.empty?
-              message = "No roles found for source user ID #{source_user_id}. Skipping user import."
-              logger.info(message)
+              context_mgr.add_warning( {:message=>"No roles found for source user ID. Skipping user import.", :source_user_id => source_user_id})
               next
             end
 
             target_user = User.find_by(id: target_user_id)
             unless target_user
-              message = "Target user not found for target user ID #{target_user_id}. Skipping user import."
-              logger.info(message)
+              context_mgr.add_warning( {:message=>"Target user not found for target user ID. Skipping user import.", :source_user_id => source_user_id})
               next
             end
 

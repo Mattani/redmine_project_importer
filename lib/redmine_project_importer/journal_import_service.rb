@@ -58,9 +58,9 @@ module RedmineProjectImporter
                 )
                 logger.debug "    Journal ##{source_journal.id} is copied successfully to the target issue ##{target_issue_id} as note-#{journal_count}"
               rescue ActiveRecord::RecordInvalid => e
-                context_mgr.add_error({ message: "    Failed to copy journal ##{source_journal.id}: Validation error - #{e.message}" })
+                context_mgr.add_warning({ message: "    Failed to copy journal ##{source_journal.id}: Validation error - #{e.message}" })
               rescue StandardError => e
-                context_mgr.add_error({ message: "    Failed to copy journal ##{source_journal.id}: Unexpected error - #{e.message}" })
+                context_mgr.add_warning({ message: "    Failed to copy journal ##{source_journal.id}: Unexpected error - #{e.message}" })
               end
             end
           end
