@@ -143,14 +143,14 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
     end
 
     it 'includes warnings and errors in the generated file' do
-      # warnings と errors をモックし直す
+      # warnings と errors をモックし直す（実際の add_warning/add_error と同じ Hash 形式）
       allow(context_mgr).to receive(:warnings).and_return([
-        "Warning 1: Something might be wrong.",
-        "Warning 2: Check your configuration."
+        { message: "Something might be wrong." },
+        { source_user_id: 2, message: "Check your configuration." }
       ])
       allow(context_mgr).to receive(:errors).and_return([
-        "Error 1: Something went wrong.",
-        "Error 2: Unable to process data."
+        { message: "Something went wrong." },
+        { source_user_id: 3, message: "Unable to process data." }
       ])
 
       manager.create_answer_file
@@ -158,12 +158,31 @@ RSpec.describe RedmineProjectImporter::AnswerFileManager do
       # ファイルの内容を確認
       data = YAML.safe_load(File.read(manager.file_path), symbolize_names: true)
       expect(data[:warnings]).to eq([
-        {:"Warning 1"=>"Something might be wrong."},
-        {:"Warning 2"=>"Check your configuration."}
+        { message: "Something might be wrong." },
+        { source_user_id: 2, message: "Check your configuration." }
       ])
       expect(data[:errors]).to eq([
-        {:"Error 1"=>"Something went wrong."},
-        {:"Error 2"=>"Unable to process data."}
+        { message: "Something went wrong." },
+        { source_user_id: 3, message: "Unable to process data." }
+      ])
+    end
+
+    it 'preserves warning messages that contain a colon (regression for YAML syntax error on load)' do
+      # role_mapper.rb が実際に生成するのと同じ形式（message の値自体にコロンを含む）
+      allow(context_mgr).to receive(:warnings).and_return([
+        { message: "No matching target role found for source role: ロール名（ID: 4）" }
+      ])
+      allow(context_mgr).to receive(:errors).and_return([])
+
+      manager.create_answer_file
+
+      # 書き出したファイルが YAML として正しく読み戻せること（構文エラーが発生しないこと）
+      raw = File.read(manager.file_path)
+      data = nil
+      expect { data = YAML.safe_load(raw, symbolize_names: true) }.not_to raise_error
+
+      expect(data[:warnings]).to eq([
+        { message: "No matching target role found for source role: ロール名（ID: 4）" }
       ])
     end
 

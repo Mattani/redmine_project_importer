@@ -189,10 +189,12 @@ module RedmineProjectImporter
       mapping.map do |source, target|
         formatted_target = if target.is_a?(Hash)
                              target.transform_keys(&:to_s).transform_values do |value|
-                               value.is_a?(Array) ? value.to_s : value
+                               # 配列はYAMLのフロー形式（[1, 2]）としてそのまま出力し、
+                               # 読み込み時に配列として復元されるようにする
+                               value.is_a?(Array) ? value.to_s : yaml_scalar(value)
                              end
                            else
-                             target.to_s # target が文字列の場合はそのまま文字列化
+                             yaml_scalar(target)
                            end
 
         if formatted_target.is_a?(Hash)
@@ -209,11 +211,20 @@ module RedmineProjectImporter
       list.map do |item|
         if item.is_a?(Hash)
           # ハッシュをネストされた形式で出力
-          "  -\n" + item.map { |k, v| "      #{k}: #{v}" }.join("\n")
+          "  -\n" + item.map { |k, v| "      #{k}: #{yaml_scalar(v)}" }.join("\n")
         else
-          "  - #{item}"
+          "  - #{yaml_scalar(item)}"
         end
       end.join("\n")
+    end
+
+    # 値を安全なインラインYAMLスカラーとして出力する（コロンや改行等を含む文字列を
+    # 手組みYAMLに埋め込んでも構文が壊れないようにする）
+    def yaml_scalar(value)
+      return 'null' if value.nil?
+
+      # YAML.dump は先頭に "---"、プレーンスカラーの場合は末尾に "..." を付与するため取り除く
+      YAML.dump(value).sub(/\A---\s?/, '').sub(/\.\.\.\s*\z/, '').strip
     end
   end
 end
