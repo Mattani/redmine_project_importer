@@ -87,6 +87,9 @@ module RedmineProjectImporter
           # チケットインポート処理
           RedmineProjectImporter::IssueImportService.import_issues(context_mgr)
 
+          # Wikiインポート処理
+          RedmineProjectImporter::WikiImportService.import_wiki(context_mgr)
+
           # インポート結果のサマリを作成・出力
           RedmineProjectImporter::ImportSummaryService.generate_report(context_mgr)
 

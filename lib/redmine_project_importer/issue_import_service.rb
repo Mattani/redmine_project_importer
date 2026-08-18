@@ -144,6 +144,24 @@ module RedmineProjectImporter
           # `priority_id` は仮で `source_issue.priority_id` を使用
           target_priority_id = source_issue.priority_id
 
+          # `fixed_version_id` は version_id_map でマッピングする。
+          # 値が無い場合はそのまま無指定。マッピングが見つからない場合
+          # （共有バージョン等、ソースプロジェクト外が所有するバージョンを参照している場合を含む）は
+          # 警告を記録した上で無指定にする。
+          target_fixed_version_id = nil
+          unless source_issue.fixed_version_id.nil?
+            mapped_version_id = context_mgr.version_id_map[source_issue.fixed_version_id]
+            if mapped_version_id
+              target_fixed_version_id = mapped_version_id
+            else
+              context_mgr.add_warning({
+                source_issue_id: source_issue.id,
+                source_fixed_version_id: source_issue.fixed_version_id,
+                message: "Fixed version for issue ##{source_issue.id} is not mapped. Setting to no version."
+              })
+            end
+          end
+
           # IssueをActiveRecordで作成
           new_issue = Issue.create!(
             project_id: target_project.id,
@@ -152,6 +170,7 @@ module RedmineProjectImporter
             tracker_id: tracker_mapping[:target_tracker_id],
             status_id: mappings[:statuses_mapping][source_issue.status_id][:target_status_id],
             priority_id: target_priority_id,
+            fixed_version_id: target_fixed_version_id,
             author_id: author_id,
             assigned_to_id: assigned_to_id
           )

@@ -1,7 +1,7 @@
 module RedmineProjectImporter
   class ContextManager
     attr_reader :source_project, :executed_at, :DEFAULTS
-    attr_accessor :target_project, :mappings, :headers, :warnings, :errors, :options, :issue_id_map, :version_id_map, :summary
+    attr_accessor :target_project, :mappings, :headers, :warnings, :errors, :options, :issue_id_map, :version_id_map, :wiki_page_id_map, :summary
 
     DEFAULTS = {
       roles_mapping: {},           # ロールマッピング (例: { source_role_id: { target_role_id: 移行先ID } })
@@ -27,6 +27,7 @@ module RedmineProjectImporter
       @options = {}
       @issue_id_map = {} # 初期化
       @version_id_map = {} # バージョンIDマッピングを初期化
+      @wiki_page_id_map = {} # WikiページIDマッピングを初期化
       @summary = {} # サマリデータを初期化
     end
 

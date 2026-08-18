@@ -40,19 +40,22 @@ module RedmineProjectImporter
           total_trackers_in_db: db_results[:total_trackers_in_db],
           total_issues: context_mgr.issue_id_map&.size || 0,
           total_issues_in_db: db_results[:total_issues_in_db],
+          total_wiki_pages: context_mgr.wiki_page_id_map&.size || 0,
+          total_wiki_pages_in_db: db_results[:total_wiki_pages_in_db],
           missing_member_emails: db_results[:missing_member_emails]
         }
       end
 
       # DBから必要なデータをまとめて取得するメソッド
       def fetch_db_data(project_id, members_mapping)
-        return { total_issues_in_db: 0, total_members_in_db: 0, total_groups_in_db: 0, total_trackers_in_db: 0, missing_member_emails: [] } unless project_id
+        return { total_issues_in_db: 0, total_members_in_db: 0, total_groups_in_db: 0, total_trackers_in_db: 0, total_wiki_pages_in_db: 0, missing_member_emails: [] } unless project_id
 
         missing_member_emails = []
         total_issues_in_db = 0
         total_members_in_db = 0
         total_groups_in_db = 0
         total_trackers_in_db = 0
+        total_wiki_pages_in_db = 0
 
         RedmineProjectImporter::DatabaseConnector.with_connection(
           env: Rails.env,
@@ -84,6 +87,9 @@ module RedmineProjectImporter
 
           # DBに登録されたトラッカー数を取得
           total_trackers_in_db = Tracker.joins(:projects).where(projects: { id: project_id }).count
+
+          # DBに登録されたWikiページ数を取得
+          total_wiki_pages_in_db = WikiPage.joins(:wiki).where(wikis: { project_id: project_id }).count
         end
 
         {
@@ -91,11 +97,12 @@ module RedmineProjectImporter
           total_members_in_db: total_members_in_db,
           total_groups_in_db: total_groups_in_db,
           total_trackers_in_db: total_trackers_in_db,
+          total_wiki_pages_in_db: total_wiki_pages_in_db,
           missing_member_emails: missing_member_emails
         }
       rescue => e
         logger.error("Failed to fetch data from DB: #{e.message}")
-        { total_issues_in_db: 0, total_members_in_db: 0, total_groups_in_db: 0, total_trackers_in_db: 0, missing_member_emails: [] }
+        { total_issues_in_db: 0, total_members_in_db: 0, total_groups_in_db: 0, total_trackers_in_db: 0, total_wiki_pages_in_db: 0, missing_member_emails: [] }
       end
 
       # サマリデータをログに出力するメソッド
@@ -110,6 +117,7 @@ module RedmineProjectImporter
         logger.info("  Total Members: #{summary[:total_members_in_db]} (Expected #{summary[:total_members]})")
         logger.info("  Total Trackers: #{summary[:total_trackers_in_db]} (Expected #{summary[:total_trackers]})")
         logger.info("  Total Issues: #{summary[:total_issues_in_db]} (Expected #{summary[:total_issues]})")
+        logger.info("  Total Wiki Pages: #{summary[:total_wiki_pages_in_db]} (Expected #{summary[:total_wiki_pages]})")
 
         if summary[:missing_member_emails].any?
           # context_mgrに警告を追加ｑｑ
@@ -160,6 +168,14 @@ module RedmineProjectImporter
           context_mgr.add_warning(
             message: "Tracker Import Mismatch",
             details: "Expected trackers: #{summary[:total_trackers]}, Total trackers in DB: #{summary[:total_trackers_in_db]}"
+          )
+        end
+
+        # Wiki Pagesの検証
+        if summary[:total_wiki_pages] != summary[:total_wiki_pages_in_db]
+          context_mgr.add_warning(
+            message: "Wiki Page Import Mismatch",
+            details: "Expected wiki pages: #{summary[:total_wiki_pages]}, Total wiki pages in DB: #{summary[:total_wiki_pages_in_db]}"
           )
         end
       end

@@ -7,6 +7,7 @@ A Redmine plugin that allows you to import projects from other Redmine instances
 - Import projects unit by unit from another Redmine instance
 - Migrate tickets including comments and custom fields  
 - Preserve parent-child ticket relationships and version mappings
+- Migrate wiki pages, including full content version history and same-project redirects
 
 ## Installation
 
